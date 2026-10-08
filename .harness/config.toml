@@ -1,0 +1,29 @@
+# forge project config. Commands run from the repo (or phase worktree) root through the shell.
+# Leave a gate empty to skip it. Keep each gate fast enough to run on every Stop.
+
+[gates]
+lint = ""        # no linter configured in the project
+types = ""       # no type checker configured
+test = "cd q4 && python -m pytest -q"
+build = "python -m py_compile q4/set_game/game.py"
+rules = ""
+timeout_sec = 120
+
+[runtime]
+# q3_sandbox: docker compose Postgres + app + notebook
+# q4: Python Set game (no persistent server)
+up = "cd q3_sandbox && docker compose -p forge_q3 up -d --wait"
+down = "cd q3_sandbox && docker compose -p forge_q3 down -v"
+health = "docker compose -p forge_q3 ps --format json"
+e2e = ""         # no e2e suite yet
+
+[proof]
+timeout_sec = 600
+
+[hooks]
+stop_gates = true
+
+[models]
+planner = "opus"
+implementer = "sonnet"
+reviewer = "opus"

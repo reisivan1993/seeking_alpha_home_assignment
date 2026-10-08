@@ -1,0 +1,9 @@
+# forge harness (machine-local)
+.harness/.cache/
+.harness/phase.lock
+.harness/runtime/
+
+# python
+.venv/
+__pycache__/
+.pytest_cache/

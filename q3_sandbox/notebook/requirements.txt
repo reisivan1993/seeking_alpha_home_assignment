@@ -1,0 +1,5 @@
+jupyterlab>=4.2,<5
+jupysql>=0.10,<0.12
+sqlalchemy>=2.0,<2.1
+psycopg[binary]>=3.2,<3.3
+pandas>=2.2,<3

@@ -1,0 +1,48 @@
+# One command: docker compose up --build
+#   db        Postgres 16
+#   app       loads fresh test data, runs the checks, then exits
+#   notebook  JupyterLab at http://localhost8889/lab/tree/q3.ipynb (starts after the data is loaded)
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: q3
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "127.0.0.1:55432:5432"   # 55432 on the host, so it doesn't clash with other local Postgres instances
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d q3"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: ./app
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/q3
+      QUERIES_DIR: /queries
+      SQL_DIR: /sql
+    volumes:
+      - ./queries:/queries:ro    # edit the queries on the host, re-run without rebuilding
+      - ./sql:/sql:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["all", "--report-only"]   # failed checks are logged, but the notebook still starts
+
+  notebook:
+    build: ./notebook
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/q3
+      QUERIES_DIR: /queries
+    ports:
+      - "127.0.0.1:8889:8888"    # localhost only: the notebook runs without a token
+    volumes:
+      - ./notebooks:/home/work   # notebooks are saved on the host
+      - ./queries:/queries:ro
+    depends_on:
+      app:
+        condition: service_completed_successfully

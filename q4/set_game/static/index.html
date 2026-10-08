@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set Game</title>
+<style>
+  :root {
+    --bg: #f4f2ee; --panel: #ffffff; --text: #1d1d1f; --muted: #6b6b70; --line: #e2dfd8;
+    --card: #ffffff; --card-line: #d6d2c9; --accent: #2f5bd3;
+    --ok: #1f7a3a; --ok-bg: #e3f3e7; --no: #8a8a8f; --no-bg: #efeeeb;
+    --red: #d1312a; --green: #1e8a3c; --purple: #6a2c9e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17171a; --panel: #212125; --text: #ececf0; --muted: #9a9aa2; --line: #333338;
+      --card: #fbfaf7; --card-line: #44444a; --accent: #7d9cff;
+      --ok: #6fd68e; --ok-bg: #1f3526; --no: #9a9aa2; --no-bg: #2a2a2f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.01em; }
+  .sub { margin: 0 0 24px; color: var(--muted); }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 20px; }
+  button { font: inherit; font-weight: 600; padding: 10px 22px; border: 0; border-radius: 10px;
+           background: var(--accent); color: #fff; cursor: pointer; }
+  button:disabled { opacity: .55; cursor: default; }
+  label { color: var(--muted); font-size: 14px; }
+  input { font: inherit; width: 110px; padding: 8px 10px; border-radius: 8px;
+          border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+  .summary { min-height: 54px; padding: 14px 16px; border-radius: 12px; margin-bottom: 18px;
+             background: var(--panel); border: 1px solid var(--line); }
+  .summary.found { background: var(--ok-bg); border-color: transparent; color: var(--ok); font-weight: 600; }
+  .summary .meta { display: block; font-weight: 400; color: var(--muted); font-size: 13px; }
+  ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  li { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center;
+       padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
+       animation: in .18s ease-out; }
+  li.set { border: 2px solid var(--ok); }
+  @keyframes in { from { opacity: 0; transform: translateY(4px); } }
+  .round { color: var(--muted); font-size: 13px; }
+  .round b { display: block; color: var(--text); font-size: 15px; }
+  .cards { display: flex; gap: 8px; flex-wrap: wrap; }
+  .card { width: 104px; height: 68px; border-radius: 8px; background: var(--card);
+          border: 1px solid var(--card-line); display: flex; align-items: center; justify-content: center; }
+  .badge { font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+           background: var(--no-bg); color: var(--no); }
+  .set .badge { background: var(--ok-bg); color: var(--ok); }
+  .left { display: block; text-align: right; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  @media (max-width: 520px) {
+    li { grid-template-columns: 1fr auto; }
+    .round { grid-column: 1 / -1; }
+    .card { width: 88px; height: 58px; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <pattern id="stripe-red" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1.4" style="fill:var(--red)"/></pattern>
+    <pattern id="stripe-green" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1.4" style="fill:var(--green)"/></pattern>
+    <pattern id="stripe-purple" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1.4" style="fill:var(--purple)"/></pattern>
+  </defs>
+</svg>
+<main>
+  <h1>Set</h1>
+  <p class="sub">Each round draws three cards from a shuffled 81-card deck and checks whether they form a set.
+    The game stops at the first set or when the deck runs out.</p>
+
+  <div class="controls">
+    <button id="play">Play</button>
+    <label for="seed">Seed (optional)</label>
+    <input id="seed" inputmode="numeric" placeholder="random">
+  </div>
+
+  <div id="summary" class="summary">Press <b>Play</b> to start a game.</div>
+  <ol id="rounds"></ol>
+</main>
+
+<script>
+const SHAPES = {
+  oval: '<rect x="1" y="1" width="22" height="54" rx="11"/>',
+  diamond: '<polygon points="12,1 23,28 12,55 1,28"/>',
+  squiggle: '<path d="M5,9 C5,0 21,0 20,12 C19,24 13,27 17,39 C21,51 13,57 7,50 C1,43 10,33 6,23 C3,16 5,13 5,9 Z"/>',
+};
+const COUNT = { one: 1, two: 2, three: 3 };
+
+function cardSvg(card) {
+  const color = `var(--${card.color})`;
+  const fill = card.shading === "solid" ? color
+             : card.shading === "striped" ? `url(#stripe-${card.color})` : "none";
+  const n = COUNT[card.number];
+  const width = n * 24 + (n - 1) * 6;
+  const shapes = Array.from({ length: n }, (_, i) =>
+    `<g transform="translate(${i * 30} 0)">${SHAPES[card.shape]}</g>`).join("");
+  const label = `${card.number} ${card.shading} ${card.color} ${card.shape}`;
+  return `<div class="card" title="${label}"><svg role="img" aria-label="${label}" width="${width}" height="56"
+      viewBox="0 0 ${width} 56" style="fill:${fill};stroke:${color};stroke-width:2">${shapes}</svg></div>`;
+}
+
+function roundItem(r) {
+  const li = document.createElement("li");
+  if (r.is_set) li.className = "set";
+  li.innerHTML = `
+    <div class="round">Round<b>${r.number}</b></div>
+    <div class="cards">${r.cards.map(cardSvg).join("")}</div>
+    <div><span class="badge">${r.is_set ? "Set!" : "No set"}</span>
+      <span class="left">${r.cards_left} left</span></div>`;
+  return li;
+}
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const playButton = document.getElementById("play");
+const seedInput = document.getElementById("seed");
+const summary = document.getElementById("summary");
+const list = document.getElementById("rounds");
+
+async function playGame() {
+  playButton.disabled = true;
+  list.innerHTML = "";
+  summary.className = "summary";
+  summary.textContent = "Drawing…";
+  try {
+    const seed = seedInput.value.trim();
+    const response = await fetch("/api/play" + (seed ? `?seed=${encodeURIComponent(seed)}` : ""));
+    const game = await response.json();
+    if (!response.ok) throw new Error(game.error || response.statusText);
+
+    for (const r of game.rounds) {
+      list.prepend(roundItem(r));
+      await sleep(90);
+    }
+    const meta = `<span class="meta">Seed ${game.seed} · ${game.rounds.length} rounds · ${game.cards_left} cards left in the deck</span>`;
+    if (game.set_found) {
+      summary.className = "summary found";
+      summary.innerHTML = `Set found in round ${game.rounds.length}.${meta}`;
+    } else {
+      summary.innerHTML = `The deck ran out: no set among ${game.rounds.length} draws.${meta}`;
+    }
+  } catch (error) {
+    summary.textContent = `Error: ${error.message}`;
+  } finally {
+    playButton.disabled = false;
+  }
+}
+
+playButton.addEventListener("click", playGame);
+</script>
+</body>
+</html>
